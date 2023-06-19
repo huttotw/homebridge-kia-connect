@@ -1,26 +1,57 @@
 
 <p align="center">
 
-<img src="https://github.com/homebridge/branding/raw/master/logos/homebridge-wordmark-logo-vertical.png" width="150">
+<img src="https://github.com/homebridge/branding/raw/master/logos/homebridge-wordmark-logo-vertical.png" width="200">
+<br />
+<img src="https://www.cnet.com/a/img/resize/148e264de9d8cc9b7a97bbe2459402fda2406809/hub/2021/01/06/19ab53c1-6b8d-4f44-a89a-b84fc7f825e8/ogi-kia.jpg?auto=webp&fit=crop&height=675&width=1200" width="200">
 
 </p>
 
 
-# Homebridge Platform Plugin Template
+# KIA Connect
 
-This is a template Homebridge platform plugin and can be used as a base to help you get started developing your own plugin.
+This plug-in uses an undocumented KIA API to start, stop and lock your KIA. This API was discovered by insepecting the network traffic in the KIA Connect web app.
 
-This template should be used in conjunction with the [developer documentation](https://developers.homebridge.io/). A full list of all supported service types, and their characteristics is available on this site.
+> Frequently calling this API could result in the consumption of your car's battery power. By default, we make one request per hour and make up to 5 requests after requesting a change of state. This is similar to how the KIA web app works.
 
-## Clone As Template
+### Known Issues
+When flipping a switch in HomeKit, it could be several seconds before the desired state is achieved. This is due to the aysnc nature and overall speed of KIA's APIs. Typically, a remote command takes around 6 seconds to send, then around 10-15 seconds to be applied to the car.
 
-Click the link below to create a new GitHub Repository using this template, or click the *Use This Template* button above.
+## Installation instructions
+You will need the following items:
+1. Your username / password for the [KIA Connect](https://owners.kia.com/us/en/about-uvo-link.html) web app.
+2. Your VIN number
 
-<span align="center">
+### Target Temperature
+When the car is started, we will attempt to bring the cabin to the specified temperature. By default, your car will run for 5 minutes, then turn off.
 
-### [Create New Repository From Template](https://github.com/homebridge/homebridge-plugin-template/generate)
+### Refresh Interval
+When the plugin is first started, we get your car's latest info from KIA. After that, we will refresh that info every `refreshInterval` until the plugin is stopped.
 
-</span>
+In addition to refreshing every `refreshInterval` we will also request vehicle info after an action is requested. This helps HomeKit stay in sync since these actions take some time and could fail due to factors outside of our control.
+
+### Sample config
+```json
+{
+    "platforms": [
+        {
+	   "name": "homebridge-kia-connect",
+           "platform": "KiaConnect",
+           "email": "me@example.com",
+           "password": "my-secret-password",
+           "cars": [
+             {
+               "name": "Telluride",
+               "vin": "XXXXXXXXXXXXXXXXX",
+               "targetTemperature": "68",
+               "refreshInterval": 3600000
+             }
+           ]
+        }
+    ]
+}
+
+```
 
 ## Setup Development Environment
 
