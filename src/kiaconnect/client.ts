@@ -11,7 +11,8 @@ import {
   VehicleSummary,
 } from './types';
 import { URLSearchParams } from 'url';
-import ExponetialBackoff from 'exponential-backoff';
+import {backOff} from 'exponential-backoff';
+import singleflight from 'node-singleflight';
 
 export class KiaConnect {
   axios: AxiosInstance;
@@ -175,8 +176,9 @@ export class KiaConnect {
 
   async vehicleInfo(vin: string): Promise<VehicleInfoList> {
     await this.logIn({userId: this.userId, password: this.password});
+
     const res = await this.axios.get(
-      'https://owners.kia.com/apps/services/owners/getvehicleinfo.html/vehicle/1/vehicleStatus/1/weather/1',
+      'https://owners.kia.com/apps/services/owners/getvehicleinfo.html/vehicle/1/vehicleStatus/1',
       {
         headers: {
           cookie: this.cookies?.join('; '),
@@ -207,7 +209,7 @@ export class KiaConnect {
   }
 
   async waitForTransaction(vin: string, xid: string): Promise<boolean> {
-    return ExponetialBackoff.backOff(
+    return backOff(
       async () => this.getTransactionStatus(vin, xid),
       {
         numOfAttempts: 4,
@@ -223,31 +225,34 @@ export class KiaConnect {
       return;
     }
 
-    const req = {userId, password, userType: '0', action: 'authenticateUser'};
-    const res = await axios.post(
-      'https://owners.kia.com/apps/services/owners/apiGateway',
-      JSON.stringify(req),
-      {
-        headers: {
-          'accept': 'application/json, text/plain, */*',
-          'accept-language': 'en-US,en;q=0.7',
-          'authority': 'owners.kia.com',
-          'cache-control': 'no-cache',
-          'content-type': 'application/x-www-form-urlencoded',
+    // We only want one login request out at a time.
+    await singleflight.Do('login', async () => {
+      const req = {userId, password, userType: '0', action: 'authenticateUser'};
+      const res = await axios.post(
+        'https://owners.kia.com/apps/services/owners/apiGateway',
+        JSON.stringify(req),
+        {
+          headers: {
+            'accept': 'application/json, text/plain, */*',
+            'accept-language': 'en-US,en;q=0.7',
+            'authority': 'owners.kia.com',
+            'cache-control': 'no-cache',
+            'content-type': 'application/x-www-form-urlencoded',
+          },
         },
-      },
-    );
+      );
 
-    this.cookies = res.headers['set-cookie'];
+      this.cookies = res.headers['set-cookie'];
 
-    const data = res.data as LogInResponse;
+      const data = res.data as LogInResponse;
 
-    // For each vehicle, map the vin to the vehicle key
-    data.payload.vehicleSummary.forEach((summary) => {
-      this.vehicleKeys.set(summary.vin, summary.vehicleKey);
+      // For each vehicle, map the vin to the vehicle key
+      data.payload.vehicleSummary.forEach((summary) => {
+        this.vehicleKeys.set(summary.vin, summary.vehicleKey);
+      });
+
+      this.lastLogin = new Date();
     });
-
-    this.lastLogin = new Date();
   };
 }
 

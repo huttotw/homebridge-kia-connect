@@ -27,8 +27,8 @@ export class Car {
     private readonly accessory: PlatformAccessory,
     private readonly kiaConnect: KiaConnect,
     private readonly name: string,
-    private readonly targetTemperature: string,
     private readonly vin: string,
+    private readonly targetTemperature: string,
   ) {
     // target indicate where we want each value to be. These are sane defaults.
     this.target = {
@@ -59,18 +59,22 @@ export class Car {
       .onGet(this.getTargetLockState.bind(this))
       .onSet(this.setTargetLockState.bind(this));
 
-    // TODO: make this get from the API.
-    this.refresh();
-    setInterval(this.refresh, 1000 * 60 * 60); // Every 60 minutes
+    this.startControlLoop();
   }
 
-  private getCurrentLockState(): number {
-    const currentLockState = this.current?.doorLock ? LockCurrentState.SECURED : LockCurrentState.UNSECURED;
+  private getCurrentLockState(): CharacteristicValue {
+    let currentLockState: number;
+    if (!this.current) {
+      currentLockState = LockCurrentState.UNKNOWN;
+    } else {
+      currentLockState = this.current.doorLock ? LockCurrentState.SECURED : LockCurrentState.UNSECURED;
+    }
+
     this.platform.log.info('getCurrentLockState:', currentLockState);
     return currentLockState;
   }
 
-  private getOn(): boolean {
+  private getOn() {
     this.platform.log.info('getOn: ', this.current?.engineStatus);
     if (!this.current) {
       return false;
@@ -84,7 +88,6 @@ export class Car {
   }
 
   private async refresh() {
-    this.platform.log.info('Refreshing vehicle info');
     const res = await this.kiaConnect.vehicleInfo(this.vin);
     this.platform.log.debug('Vehicle info:', res);
     const vehicleInfo = parseVehicleInfo(res);
@@ -93,11 +96,13 @@ export class Car {
     }
 
     this.current = vehicleInfo;
-    this.platform.log.debug('Resetting target values');
-    this.target = {
-      ...this.target,
-      lockState: vehicleInfo.doorLock ? LockTargetState.SECURED : LockTargetState.UNSECURED,
-    };
+
+    // Update charactereistics
+    this.engine.updateCharacteristic(this.platform.Characteristic.On, this.getOn());
+    this.lock.updateCharacteristic(this.platform.Characteristic.LockCurrentState, this.getCurrentLockState());
+    // Set the target state to the current state
+    this.target.lockState = this.getCurrentLockState();
+    this.lock.updateCharacteristic(this.platform.Characteristic.LockTargetState, this.getTargetLockState());
   }
 
   private async setOn(value: CharacteristicValue) {
@@ -116,8 +121,7 @@ export class Car {
       xid = await this.kiaConnect.stopClimate(this.vin);
     }
 
-    await this.kiaConnect.waitForTransaction(this.vin, xid);
-    this.refresh();
+    this.kiaConnect.waitForTransaction(this.vin, xid).then(this.refresh.bind(this));
   }
 
   private async setTargetLockState(value: CharacteristicValue) {
@@ -134,58 +138,27 @@ export class Car {
       xid = await this.kiaConnect.unlock(this.vin);
     }
 
-    await this.kiaConnect.waitForTransaction(this.vin, xid);
+    this.kiaConnect.waitForTransaction(this.vin, xid).then(this.refresh.bind(this));
+  }
+
+  private async startControlLoop() {
     this.refresh();
+    setInterval(this.refresh, 1000 * 60 * 5);
   }
 }
 
 type VehicleInfo = {
-  vin: string;
-  model: string;
-  modelYear: string;
-  name: string;
-  trimName: string;
-  exteriorColor: string;
   engineStatus: boolean;
   doorLock: boolean;
-  fuelLevelPct: number;
-  fuelLevelLow: boolean;
-  batteryLevelPct: number;
-  batteryLevelLow: boolean;
-  temperature: number; // Celcius
   airCtrl: boolean;
-  outsideTemp: number; // Celcius
 };
 
 const parseVehicleInfo = (res: VehicleInfoList): VehicleInfo => {
-  const model = res.vehicleConfig.vehicleDetail.vehicle.trim.modelName;
-  const modelYear = res.vehicleConfig.vehicleDetail.vehicle.trim.modelYear;
-  const trimName = res.vehicleConfig.vehicleDetail.vehicle.trim.trimName;
-  const fuelLevelPct = res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.fuelLevel;
-  const batteryLevelPct = res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.batteryStatus.stateOfCharge;
-  const temperatureValue = parseInt(res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.airTemp.value, 10);
   const airCtrl = res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.airCtrl;
-  const outsideTemp = fToC(parseInt(res.lastVehicleInfo.weather.outsideTemp.find(val => val.unit === 1)?.value as string, 10));
 
   return {
-    vin: res.vehicleConfig.vehicleDetail.vehicle.vin,
-    model,
-    modelYear,
-    name: `KIA ${model} ${trimName} ${modelYear}`,
-    trimName,
-    exteriorColor: res.vehicleConfig.vehicleDetail.vehicle.exteriorColor,
     engineStatus: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.engine,
     doorLock: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorLock,
-    fuelLevelPct,
-    fuelLevelLow: fuelLevelPct < 10,
-    batteryLevelPct,
-    batteryLevelLow: batteryLevelPct <= res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.batteryStatus.warning,
-    temperature: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.airTemp.unit === 1 ? fToC(temperatureValue) : temperatureValue,
     airCtrl,
-    outsideTemp,
   };
-};
-
-const fToC = (f: number): number => {
-  return (f - 32) * 5 / 9;
 };
