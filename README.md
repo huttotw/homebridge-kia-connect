@@ -12,7 +12,17 @@
 
 This plug-in uses an undocumented KIA API to start, stop and lock your KIA. This API was discovered by insepecting the network traffic in the KIA Connect web app.
 
+This plug-in will create a **switch** to turn the engine / climate control on and off as well as a **lock mechanism** to lock / unlock the doors.
+
 > Frequently calling this API could result in the consumption of your car's battery power. By default, we make one request per hour and make up to 5 requests after requesting a change of state. This is similar to how the KIA web app works.
+
+### Future Work
+- [ ] Battery percentage
+- [ ] Fuel percentage
+- [ ] Exterior weather
+- [ ] Heated / air conditioned seats
+- [ ] Defrost
+- [ ] Heated steering wheel
 
 ### Known Issues
 When flipping a switch in HomeKit, it could be several seconds before the desired state is achieved. This is due to the aysnc nature and overall speed of KIA's APIs. Typically, a remote command takes around 6 seconds to send, then around 10-15 seconds to be applied to the car.
