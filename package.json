@@ -27,7 +27,8 @@
     "homebridge-plugin"
   ],
   "dependencies": {
-    "axios": "^1.4.0"
+    "axios": "^1.4.0",
+    "exponential-backoff": "^3.1.1"
   },
   "devDependencies": {
     "@types/node": "^16.10.9",

@@ -11,6 +11,7 @@ import {
   VehicleSummary,
 } from './types';
 import { URLSearchParams } from 'url';
+import ExponetialBackoff from 'exponential-backoff';
 
 export class KiaConnect {
   axios: AxiosInstance;
@@ -26,45 +27,80 @@ export class KiaConnect {
     this.userId = userId;
   }
 
-  async lock(vin: string): Promise<void> {
+  async getTransactionStatus(vin: string, xid: string): Promise<boolean> {
     await this.logIn({userId: this.userId, password: this.password});
-    await this.axios.get(
-      'https://owners.kia.com/apps/services/owners/remotevehicledata?requestJson={%22action%22:%22ACTION_EXEC_REMOTE_LOCK_DOORS%22}',
+
+    const requestJson = {
+      xid,
+      action: 'ACTION_GET_TRANSACTION_STATUS',
+    };
+    const query = new URLSearchParams();
+    query.set('requestJson', JSON.stringify(requestJson));
+
+    const res = await this.axios.get(
+      `https://owners.kia.com/apps/services/owners/remotevehicledata?${query.toString()}`,
       {
         headers: {
           cookie: this.cookies?.join('; '),
           vinkey: this.vehicleKeys.get(vin),
         },
-      });
+      },
+    );
+
+    // If the transaction is no longer being remotely executed...
+    return res.data.payload.remoteStatus === 0;
   }
 
-  async unlock(vin: string): Promise<void> {
+  async lock(vin: string): Promise<string> {
     await this.logIn({userId: this.userId, password: this.password});
-    await this.axios.get(
-      'https://owners.kia.com/apps/services/owners/remotevehicledata?requestJson={%22action%22:%22ACTION_EXEC_REMOTE_UNLOCK_DOORS%22}',
+
+    const requestJson = {
+      action: 'ACTION_EXEC_REMOTE_LOCK_DOORS',
+    };
+    const query = new URLSearchParams();
+    query.set('requestJson', JSON.stringify(requestJson));
+
+    const res = await this.axios.get(
+      `https://owners.kia.com/apps/services/owners/remotevehicledata?${query.toString()}`,
       {
         headers: {
           cookie: this.cookies?.join('; '),
           vinkey: this.vehicleKeys.get(vin),
         },
-      });
+      },
+    );
+
+    return res.data.header.xid;
   }
 
-  async startClimate(vin: string, targetTempF: number) {
+  async unlock(vin: string): Promise<string> {
     await this.logIn({userId: this.userId, password: this.password});
 
-    let temp = `${targetTempF}`;
-    if (targetTempF < 62) {
-      temp = 'LOW';
-    } else if (targetTempF > 82) {
-      temp = 'HIGH';
-    }
+    const requestJson = {
+      action: 'ACTION_EXEC_REMOTE_UNLOCK_DOORS',
+    };
+    const query = new URLSearchParams();
+    query.set('requestJson', JSON.stringify(requestJson));
 
+    const res = await this.axios.get(
+      `https://owners.kia.com/apps/services/owners/remotevehicledata?${query.toString()}`,
+      {
+        headers: {
+          cookie: this.cookies?.join('; '),
+          vinkey: this.vehicleKeys.get(vin),
+        },
+      },
+    );
+    return res.data.header.xid;
+  }
+
+  async startClimate(vin: string, targetTempF: string): Promise<string> {
+    await this.logIn({userId: this.userId, password: this.password});
     const req: RemoteClimateRequest = {
       action: 'ACTION_EXEC_REMOTE_CLIMATE_ON',
       remoteClimate: {
         airTemp: {
-          value: `${temp}`,
+          value: targetTempF,
           unit: 1,
         },
         airCtrl: true,
@@ -107,33 +143,40 @@ export class KiaConnect {
     const query = new URLSearchParams();
     query.set('requestJson', JSON.stringify(req));
 
-    await this.axios.get(`https://owners.kia.com/apps/services/owners/remotevehicledata?${query.toString()}`, {
+    const res = await this.axios.get(`https://owners.kia.com/apps/services/owners/remotevehicledata?${query.toString()}`, {
       headers: {
         cookie: this.cookies?.join('; '),
         vinkey: this.vehicleKeys.get(vin),
       },
     });
+
+    return res.data.header.xid;
   }
 
-  async stopClimate(vin: string) {
+  async stopClimate(vin: string): Promise<string> {
     await this.logIn({userId: this.userId, password: this.password});
 
-    await this.axios.get(
-      'https://owners.kia.com/apps/services/owners/remotevehicledata?requestJson={%22action%22:%22ACTION_EXEC_REMOTE_CLIMATE_OFF%22}',
+    const requestJson = {
+      action: 'ACTION_EXEC_REMOTE_CLIMATE_OFF',
+    };
+    const query = new URLSearchParams();
+    query.set('requestJson', JSON.stringify(requestJson));
+
+    const res = await this.axios.get(
+      `https://owners.kia.com/apps/services/owners/remotevehicledata?${query.toString()}`,
       {
         headers: {
           cookie: this.cookies?.join('; '),
           vinkey: this.vehicleKeys.get(vin),
         },
       });
+    return res.data.header.xid;
   }
 
   async vehicleInfo(vin: string): Promise<VehicleInfoList> {
     await this.logIn({userId: this.userId, password: this.password});
-
     const res = await this.axios.get(
-      // eslint-disable-next-line max-len
-      'https://owners.kia.com/apps/services/owners/getvehicleinfo.html/vehicle/1/maintenance/1/vehicleFeature/1/airTempRange/1/seatHeatCoolOption/1/enrollment/1/dtc/1/vehicleStatus/1/weather/1/location/1/dsAndUbiEligibilityInfo/1',
+      'https://owners.kia.com/apps/services/owners/getvehicleinfo.html/vehicle/1/vehicleStatus/1/weather/1',
       {
         headers: {
           cookie: this.cookies?.join('; '),
@@ -163,9 +206,20 @@ export class KiaConnect {
     return res.data.payload.vehicleSummary;
   }
 
+  async waitForTransaction(vin: string, xid: string): Promise<boolean> {
+    return ExponetialBackoff.backOff(
+      async () => this.getTransactionStatus(vin, xid),
+      {
+        numOfAttempts: 4,
+        startingDelay: 1000 * 10, // 12 seconds
+        timeMultiple: 0.8, // Reduce the time between requests, we should be getting closer to a result.
+      },
+    );
+  }
+
   private logIn = async ({userId, password}: LogInRequest) => {
     // If we last logged in less than 5 minutes ago for the same vin, don't log in again
-    if (this.lastLogin && this.lastLogin?.getTime() > Date.now() - (1000 * 60 * 5)) {
+    if (this.lastLogin && this.lastLogin?.getTime() > Date.now() - (1000 * 60 * 10)) {
       return;
     }
 

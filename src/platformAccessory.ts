@@ -27,7 +27,7 @@ export class Car {
     private readonly accessory: PlatformAccessory,
     private readonly kiaConnect: KiaConnect,
     private readonly name: string,
-    private readonly targetTemperature: number,
+    private readonly targetTemperature: string,
     private readonly vin: string,
   ) {
     // target indicate where we want each value to be. These are sane defaults.
@@ -59,15 +59,19 @@ export class Car {
       .onGet(this.getTargetLockState.bind(this))
       .onSet(this.setTargetLockState.bind(this));
 
+    // TODO: make this get from the API.
     this.refresh();
     setInterval(this.refresh, 1000 * 60 * 60); // Every 60 minutes
   }
 
   private getCurrentLockState(): number {
-    return this.current?.doorLock ? LockCurrentState.SECURED : LockCurrentState.UNSECURED;
+    const currentLockState = this.current?.doorLock ? LockCurrentState.SECURED : LockCurrentState.UNSECURED;
+    this.platform.log.info('getCurrentLockState:', currentLockState);
+    return currentLockState;
   }
 
   private getOn(): boolean {
+    this.platform.log.info('getOn: ', this.current?.engineStatus);
     if (!this.current) {
       return false;
     }
@@ -75,6 +79,7 @@ export class Car {
   }
 
   private getTargetLockState() {
+    this.platform.log.info('getTargetLockState: ', this.target.lockState);
     return this.target.lockState;
   }
 
@@ -99,37 +104,38 @@ export class Car {
     if (!this.current) {
       throw new Error('Not ready to start the engine');
     }
+
+    let xid: string;
     if (value) {
       // Turn on the engine
       this.platform.log.info('Turning on the engine');
-      await this.kiaConnect.startClimate(this.vin, this.targetTemperature);
-      this.current.engineStatus = true;
+      xid = await this.kiaConnect.startClimate(this.vin, this.targetTemperature);
     } else {
       // Turn off the engine
       this.platform.log.info('Turning off the engine');
-      await this.kiaConnect.stopClimate(this.vin);
-      this.current.engineStatus = false;
+      xid = await this.kiaConnect.stopClimate(this.vin);
     }
 
-    // Schedule a refresh in 6 minutes
-    setTimeout(this.refresh, 1000 * 60 * 6);
+    await this.kiaConnect.waitForTransaction(this.vin, xid);
+    this.refresh();
   }
 
   private async setTargetLockState(value: CharacteristicValue) {
+    let xid: string;
     if (value === LockCurrentState.SECURED) {
       // Lock the doors
       this.platform.log.info('Locking the doors');
       this.target.lockState = LockTargetState.SECURED;
-      await this.kiaConnect.lock(this.vin);
+      xid = await this.kiaConnect.lock(this.vin);
     } else {
       // Unlock the doors
       this.platform.log.info('Unlocking the doors');
       this.target.lockState = LockTargetState.UNSECURED;
-      await this.kiaConnect.unlock(this.vin);
+      xid = await this.kiaConnect.unlock(this.vin);
     }
 
-    // Schedule a refresh in 30 seconds
-    setTimeout(this.refresh, 1000 * 30);
+    await this.kiaConnect.waitForTransaction(this.vin, xid);
+    this.refresh();
   }
 }
 
