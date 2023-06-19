@@ -29,6 +29,7 @@ export class Car {
     private readonly name: string,
     private readonly vin: string,
     private readonly targetTemperature: string,
+    private readonly refreshInterval: number,
   ) {
     // target indicate where we want each value to be. These are sane defaults.
     this.target = {
@@ -142,8 +143,12 @@ export class Car {
   }
 
   private async startControlLoop() {
+    this.platform.log.info('Starting control loop', {
+      refreshInterval: this.refreshInterval,
+      vin: this.vin,
+    });
     this.refresh();
-    setInterval(this.refresh, 1000 * 60 * 5);
+    setInterval(this.refresh, this.refreshInterval || 1000 * 60 * 60);
   }
 }
 

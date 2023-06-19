@@ -62,6 +62,13 @@
               "title": "VIN",
               "type": "string",
               "required": true
+            },
+            "refreshInterval": {
+              "title": "Refresh Interval (ms)",
+              "description": "The number of milliseconds to wait between refreshing the vehicle's info. Setting this to a low number could drain your cars battery. Do not set below 10 seconds, some API requests take at least 10 seconds to respond.",
+              "type": "number",
+              "required": true,
+              "default": 3600000
             }
           }
         }

@@ -13,6 +13,7 @@ import {
 import { URLSearchParams } from 'url';
 import {backOff} from 'exponential-backoff';
 import singleflight from 'node-singleflight';
+import { Logger } from 'homebridge';
 
 export class KiaConnect {
   axios: AxiosInstance;
@@ -22,7 +23,7 @@ export class KiaConnect {
   vehicleKeys: Map<string, string> = new Map();
   lastLogin?: Date;
 
-  constructor(userId: string, password: string) {
+  constructor(userId: string, password: string, private readonly log: Logger) {
     this.axios = axios.create({withCredentials: true});
     this.password = password;
     this.userId = userId;
@@ -48,6 +49,8 @@ export class KiaConnect {
       },
     );
 
+    this.log.debug('getTransactionStatus', res.data);
+
     // If the transaction is no longer being remotely executed...
     return res.data.payload.remoteStatus === 0;
   }
@@ -71,6 +74,8 @@ export class KiaConnect {
       },
     );
 
+    this.log.debug('lock', res.data);
+
     return res.data.header.xid;
   }
 
@@ -92,6 +97,9 @@ export class KiaConnect {
         },
       },
     );
+
+    this.log.debug('unlock', res.data);
+
     return res.data.header.xid;
   }
 
@@ -151,6 +159,8 @@ export class KiaConnect {
       },
     });
 
+    this.log.debug('startClimate', res.data);
+
     return res.data.header.xid;
   }
 
@@ -171,6 +181,9 @@ export class KiaConnect {
           vinkey: this.vehicleKeys.get(vin),
         },
       });
+
+    this.log.debug('stopClimate', res.data);
+
     return res.data.header.xid;
   }
 
@@ -186,6 +199,8 @@ export class KiaConnect {
         },
       },
     );
+
+    this.log.debug('vehicleInfo', res.data);
 
     const data = res.data as VehicleInfoResponse;
     const info = data.payload.vehicleInfoList.find((info) => info.vehicleConfig.vehicleDetail.vehicle.vin === vin);
@@ -205,15 +220,20 @@ export class KiaConnect {
       },
     });
 
+    this.log.debug('vehicleList', res.data);
+
     return res.data.payload.vehicleSummary;
   }
 
   async waitForTransaction(vin: string, xid: string): Promise<boolean> {
     return backOff(
-      async () => this.getTransactionStatus(vin, xid),
+      async () => {
+        this.log.debug('waitForTransaction', xid);
+        return this.getTransactionStatus(vin, xid);
+      },
       {
-        numOfAttempts: 4,
-        startingDelay: 1000 * 10, // 12 seconds
+        numOfAttempts: 8,
+        startingDelay: 1000 * 5, // 10 seconds
         timeMultiple: 0.8, // Reduce the time between requests, we should be getting closer to a result.
       },
     );
@@ -222,6 +242,7 @@ export class KiaConnect {
   private logIn = async ({userId, password}: LogInRequest) => {
     // If we last logged in less than 5 minutes ago for the same vin, don't log in again
     if (this.lastLogin && this.lastLogin?.getTime() > Date.now() - (1000 * 60 * 10)) {
+      this.log.debug('logIn', 'cache hit');
       return;
     }
 
@@ -245,6 +266,8 @@ export class KiaConnect {
       this.cookies = res.headers['set-cookie'];
 
       const data = res.data as LogInResponse;
+
+      this.log.debug('logIn', res.data);
 
       // For each vehicle, map the vin to the vehicle key
       data.payload.vehicleSummary.forEach((summary) => {

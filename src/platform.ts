@@ -23,7 +23,7 @@ export class Platform implements DynamicPlatformPlugin {
     public readonly api: API,
   ) {
     this.log.debug('Finished initializing platform:', this.config.name);
-    this.kiaConnect = new KiaConnect(this.config.email, this.config.password);
+    this.kiaConnect = new KiaConnect(this.config.email, this.config.password, this.log);
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
     // Dynamic Platform plugins should only register new accessories after this event was fired,
@@ -69,7 +69,7 @@ export class Platform implements DynamicPlatformPlugin {
 
         // create the accessory handler for the restored accessory
         // this is imported from `platformAccessory.ts`
-        new Car(this, existingAccessory, this.kiaConnect, car.name, car.vin, car.targetTemperature);
+        new Car(this, existingAccessory, this.kiaConnect, car.name, car.vin, car.targetTemperature, car.refreshInterval);
 
       // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
       // remove platform accessories when no longer present
@@ -84,7 +84,7 @@ export class Platform implements DynamicPlatformPlugin {
 
         // create the accessory handler for the newly create accessory
         // this is imported from `platformAccessory.ts`
-        new Car(this, accessory, this.kiaConnect, car.name, car.vin, car.targetTemperature);
+        new Car(this, accessory, this.kiaConnect, car.name, car.vin, car.targetTemperature, car.refreshInterval);
 
         // link the accessory to your platform
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
