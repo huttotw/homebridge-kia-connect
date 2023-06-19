@@ -1,15 +1,70 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "KiaConnect",
   "pluginType": "platform",
   "singular": true,
   "schema": {
     "type": "object",
     "properties": {
-      "name": {
-        "title": "Name",
+      "email": {
+        "title": "Email",
         "type": "string",
+        "required": true
+      },
+      "password": {
+        "title": "Password",
+        "type": "string",
+        "required": true
+      },
+      "cars": {
+        "title": "VINs",
+        "description": "The VINs of the vehicles you want to connect to.",
+        "type": "array",
         "required": true,
-        "default": "Example Dynamic Platform"
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string",
+              "required": true
+            },
+            "targetTemperature": {
+              "title": "Target Temperature (F)",
+              "type": "string",
+              "required": true,
+              "enum": [
+                "LOW",
+                "62",
+                "63",
+                "64",
+                "65",
+                "66",
+                "67",
+                "68",
+                "69",
+                "70",
+                "71",
+                "72",
+                "73",
+                "74",
+                "75",
+                "76",
+                "77",
+                "78",
+                "79",
+                "80",
+                "81",
+                "82",
+                "HIGH"
+              ]
+            },
+            "vin": {
+              "title": "VIN",
+              "type": "string",
+              "required": true
+            }
+          }
+        }
       }
     }
   }
