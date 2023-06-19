@@ -3,10 +3,6 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { Platform } from './platform';
 import { VehicleInfoList } from './kiaconnect/types';
 import { KiaConnect } from './kiaconnect/client';
-import {
-  LockCurrentState,
-  LockTargetState,
-} from 'hap-nodejs/dist/lib/definitions';
 
 type Target = {
   lockState: CharacteristicValue;
@@ -33,7 +29,7 @@ export class Car {
   ) {
     // target indicate where we want each value to be. These are sane defaults.
     this.target = {
-      lockState: LockTargetState.SECURED,
+      lockState: 0,
     };
 
     // Setup general info about the car
@@ -66,9 +62,9 @@ export class Car {
   private getCurrentLockState(): CharacteristicValue {
     let currentLockState: number;
     if (!this.current) {
-      currentLockState = LockCurrentState.UNKNOWN;
+      currentLockState = 3; // UNKNOWN
     } else {
-      currentLockState = this.current.doorLock ? LockCurrentState.SECURED : LockCurrentState.UNSECURED;
+      currentLockState = this.current.doorLock ? 1 : 0; // SECURED : UNSECURED
     }
 
     this.platform.log.info('getCurrentLockState:', currentLockState);
@@ -127,15 +123,15 @@ export class Car {
 
   private async setTargetLockState(value: CharacteristicValue) {
     let xid: string;
-    if (value === LockCurrentState.SECURED) {
+    if (value === 1) {
       // Lock the doors
       this.platform.log.info('Locking the doors');
-      this.target.lockState = LockTargetState.SECURED;
+      this.target.lockState = 1;
       xid = await this.kiaConnect.lock(this.vin);
     } else {
       // Unlock the doors
       this.platform.log.info('Unlocking the doors');
-      this.target.lockState = LockTargetState.UNSECURED;
+      this.target.lockState = 0;
       xid = await this.kiaConnect.unlock(this.vin);
     }
 

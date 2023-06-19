@@ -23,10 +23,10 @@ You will need the following items:
 2. Your VIN number
 
 ### Target Temperature
-When the car is started, we will attempt to bring the cabin to the specified temperature. By default, your car will run for 5 minutes, then turn off.
+When the car is started, we will attempt to bring the cabin to the specified temperature. By default, your car will run for 5 minutes, then turn off. This value should be given in Farenheit.
 
 ### Refresh Interval
-When the plugin is first started, we get your car's latest info from KIA. After that, we will refresh that info every `refreshInterval` until the plugin is stopped.
+When the plugin is first started, we get your car's latest info from KIA. After that, we will refresh that info every `refreshInterval` until the plugin is stopped. This value should be given in milliseconds.
 
 In addition to refreshing every `refreshInterval` we will also request vehicle info after an action is requested. This helps HomeKit stay in sync since these actions take some time and could fail due to factors outside of our control.
 

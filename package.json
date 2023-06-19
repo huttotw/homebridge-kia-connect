@@ -1,9 +1,9 @@
 {
-  "private": true,
-  "displayName": "Kia Connect",
-  "name": "homebridge-plugin-name",
+  "private": false,
+  "displayName": "KIA Connect",
+  "name": "homebridge-kia-connect",
   "version": "1.0.0",
-  "description": "A short description about what your plugin does.",
+  "description": "Control your KIA via Homebridge",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
