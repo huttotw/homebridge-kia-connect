@@ -17,9 +17,9 @@ This plug-in will create a **switch** to turn the engine / climate control on an
 > Frequently calling this API could result in the consumption of your car's battery power. By default, we make one request per hour and make up to 5 requests after requesting a change of state. This is similar to how the KIA web app works.
 
 ### Future Work
-- [ ] Battery percentage
+- [x] Battery percentage
 - [ ] Fuel percentage
-- [ ] Exterior weather
+- [x] Exterior weather
 - [ ] Heated / air conditioned seats
 - [ ] Defrost
 - [ ] Heated steering wheel
