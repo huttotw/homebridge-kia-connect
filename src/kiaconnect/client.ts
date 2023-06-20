@@ -191,7 +191,8 @@ export class KiaConnect {
     await this.logIn({userId: this.userId, password: this.password});
 
     const res = await this.axios.get(
-      'https://owners.kia.com/apps/services/owners/getvehicleinfo.html/vehicle/1/vehicleStatus/1',
+      // eslint-disable-next-line max-len
+      'https://owners.kia.com/apps/services/owners/getvehicleinfo.html/vehicle/1/maintenance/1/vehicleFeature/1/airTempRange/1/seatHeatCoolOption/1/enrollment/1/dtc/1/vehicleStatus/1/weather/1/location/1/dsAndUbiEligibilityInfo/1',
       {
         headers: {
           cookie: this.cookies?.join('; '),

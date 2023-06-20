@@ -4,6 +4,13 @@ import { Platform } from './platform';
 import { VehicleInfoList } from './kiaconnect/types';
 import { KiaConnect } from './kiaconnect/client';
 
+type Door = {
+  id: string;
+  name: string;
+  onGet: () => CharacteristicValue;
+  service: Service | null;
+};
+
 type Target = {
   lockState: CharacteristicValue;
 };
@@ -13,10 +20,11 @@ type Target = {
  * Each accessory may expose multiple services of different service types.
  */
 export class Car {
-  private target: Target;
+  private current: VehicleInfo | null = null;
+  private doors: Door[];
   private engine: Service;
   private lock: Service;
-  private current: VehicleInfo | null = null;
+  private target: Target;
 
   constructor(
     private readonly platform: Platform,
@@ -56,6 +64,25 @@ export class Car {
       .onGet(this.getTargetLockState.bind(this))
       .onSet(this.setTargetLockState.bind(this));
 
+    // Setup door contact sensors
+    this.doors = [
+      {id: 'frontLeftDoor', name: 'Front Left Door', onGet: this.getFrontLeftContactSensorState, service: null},
+      {id: 'frontRightDoor', name: 'Front Right Door', onGet: this.getFrontRightContactSensorState, service: null},
+      {id: 'backLeftDoor', name: 'Back Left Door', onGet: this.getBackLeftContactSensorState, service: null},
+      {id: 'backRightDoor', name: 'Back Right Door', onGet: this.getBackRightContactSensorState, service: null},
+      {id: 'hood', name: 'Hood', onGet: this.getHoodContactSensorState, service: null},
+      {id: 'trunk', name: 'Trunk', onGet: this.getTrunkContactSensorState, service: null},
+    ];
+    this.doors.forEach((door, i) => {
+      const x = this.accessory.getService(door.id) ||
+      this.accessory.addService(this.platform.Service.ContactSensor, door.id, `${this.vin}:${door.id}`);
+      x.setCharacteristic(this.platform.Characteristic.Name, door.name);
+      x.getCharacteristic(this.platform.Characteristic.ContactSensorState)
+        .onGet(door.onGet.bind(this));
+
+      this.doors[i].service = x;
+    });
+
     this.startControlLoop();
   }
 
@@ -64,19 +91,92 @@ export class Car {
     if (!this.current) {
       currentLockState = 3; // UNKNOWN
     } else {
-      currentLockState = this.current.doorLock ? 1 : 0; // SECURED : UNSECURED
+      currentLockState = this.current.areDoorsLocked ? 1 : 0; // SECURED : UNSECURED
     }
 
     this.platform.log.info('getCurrentLockState:', currentLockState);
     return currentLockState;
   }
 
+  private getBackLeftContactSensorState(): CharacteristicValue {
+    let state: number;
+    if (!this.current) {
+      state = 0; // CONTACT_DETECTED
+    } else {
+      state = this.current.areDoorsClosed.backLeft ? 0 : 1; // CONTACT_DETECTED : CONTACT_NOT_DETECTED
+    }
+
+    this.platform.log.info('getBackLeftContactSensorState:', state);
+    return state;
+  }
+
+
+  private getBackRightContactSensorState(): CharacteristicValue {
+    let state: number;
+    if (!this.current) {
+      state = 0; // CONTACT_DETECTED
+    } else {
+      state = this.current.areDoorsClosed.backRight ? 0 : 1; // CONTACT_DETECTED : CONTACT_NOT_DETECTED
+    }
+
+    this.platform.log.info('getBackRightContactSensorState:', state);
+    return state;
+  }
+
+  private getHoodContactSensorState(): CharacteristicValue {
+    let state: number;
+    if (!this.current) {
+      state = 0; // CONTACT_DETECTED
+    } else {
+      state = this.current.areDoorsClosed.hood ? 0 : 1; // CONTACT_DETECTED : CONTACT_NOT_DETECTED
+    }
+
+    this.platform.log.info('getHoodContactSensorState:', state);
+    return state;
+  }
+
+  private getFrontLeftContactSensorState(): CharacteristicValue {
+    let state: number;
+    if (!this.current) {
+      state = 0; // CONTACT_DETECTED
+    } else {
+      state = this.current.areDoorsClosed.frontLeft ? 0 : 1; // CONTACT_DETECTED : CONTACT_NOT_DETECTED
+    }
+
+    this.platform.log.info('getFrontLeftContactSensorState:', state);
+    return state;
+  }
+
+  private getFrontRightContactSensorState(): CharacteristicValue {
+    let state: number;
+    if (!this.current) {
+      state = 0; // CONTACT_DETECTED
+    } else {
+      state = this.current.areDoorsClosed.frontRight ? 0 : 1; // CONTACT_DETECTED : CONTACT_NOT_DETECTED
+    }
+
+    this.platform.log.info('getFrontRightContactSensorState:', state);
+    return state;
+  }
+
+  private getTrunkContactSensorState(): CharacteristicValue {
+    let state: number;
+    if (!this.current) {
+      state = 0; // CONTACT_DETECTED
+    } else {
+      state = this.current.areDoorsClosed.trunk ? 0 : 1; // CONTACT_DETECTED : CONTACT_NOT_DETECTED
+    }
+
+    this.platform.log.info('getTrunkContactSensorState:', state);
+    return state;
+  }
+
   private getOn() {
-    this.platform.log.info('getOn: ', this.current?.engineStatus);
+    this.platform.log.info('getOn: ', this.current?.isEngineOn);
     if (!this.current) {
       return false;
     }
-    return this.current.engineStatus;
+    return this.current.isEngineOn;
   }
 
   private getTargetLockState() {
@@ -97,9 +197,15 @@ export class Car {
     // Update charactereistics
     this.engine.updateCharacteristic(this.platform.Characteristic.On, this.getOn());
     this.lock.updateCharacteristic(this.platform.Characteristic.LockCurrentState, this.getCurrentLockState());
+
     // Set the target state to the current state
     this.target.lockState = this.getCurrentLockState();
     this.lock.updateCharacteristic(this.platform.Characteristic.LockTargetState, this.getTargetLockState());
+
+    // Set the door contact sensors
+    this.doors.forEach(door => {
+      door.service?.updateCharacteristic(this.platform.Characteristic.ContactSensorState, door.onGet.bind(this)());
+    });
   }
 
   private async setOn(value: CharacteristicValue) {
@@ -144,22 +250,37 @@ export class Car {
       vin: this.vin,
     });
     this.refresh();
-    setInterval(this.refresh, this.refreshInterval || 1000 * 60 * 60);
+    setInterval(this.refresh.bind(this), this.refreshInterval || 1000 * 60 * 1); // Every 1 minute
   }
 }
 
 type VehicleInfo = {
-  engineStatus: boolean;
-  doorLock: boolean;
-  airCtrl: boolean;
+  isEngineOn: boolean;
+  areDoorsLocked: boolean;
+  areDoorsClosed: {
+    frontLeft: boolean;
+    frontRight: boolean;
+    hood: boolean;
+    backLeft: boolean;
+    backRight: boolean;
+    trunk: boolean;
+  };
+  isAirOn: boolean;
 };
 
 const parseVehicleInfo = (res: VehicleInfoList): VehicleInfo => {
-  const airCtrl = res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.airCtrl;
 
   return {
-    engineStatus: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.engine,
-    doorLock: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorLock,
-    airCtrl,
+    isEngineOn: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.engine,
+    areDoorsLocked: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorLock,
+    areDoorsClosed: {
+      backLeft: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorStatus.backLeft === 0,
+      backRight: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorStatus.backRight === 0,
+      hood: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorStatus.hood === 0,
+      frontLeft: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorStatus.frontLeft === 0,
+      frontRight: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorStatus.frontRight === 0,
+      trunk: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorStatus.trunk === 0,
+    },
+    isAirOn: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.airCtrl,
   };
 };
