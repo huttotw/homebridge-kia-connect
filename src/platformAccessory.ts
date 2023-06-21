@@ -20,7 +20,6 @@ type Target = {
  * Each accessory may expose multiple services of different service types.
  */
 export class Car {
-  private battery: Service;
   private current: VehicleInfo | null = null;
   private doors: Door[];
   private engine: Service;
@@ -42,8 +41,9 @@ export class Car {
     };
 
     // Setup general info about the car
-    const info = this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Kia');
+    const info = this.accessory.getService(this.platform.Service.AccessoryInformation) ||
+      this.accessory.addService(this.platform.Service.AccessoryInformation);
+    info.setCharacteristic(this.platform.Characteristic.Manufacturer, 'Kia');
     info.setCharacteristic(this.platform.Characteristic.SerialNumber, this.vin);
     info.setCharacteristic(this.platform.Characteristic.Name, this.name);
 
@@ -85,14 +85,14 @@ export class Car {
     });
 
     // Setup battery sensor
-    this.battery = this.accessory.getService('battery') ||
+    const battery = this.accessory.getService('battery') ||
       this.accessory.addService(this.platform.Service.Battery, 'battery', this.vin);
-    this.battery.setCharacteristic(this.platform.Characteristic.Name, 'Battery');
-    this.battery.getCharacteristic(this.platform.Characteristic.BatteryLevel)
+    battery.setCharacteristic(this.platform.Characteristic.Name, 'Battery');
+    battery.getCharacteristic(this.platform.Characteristic.BatteryLevel)
       .onGet(this.getBatteryLevel.bind(this));
-    this.battery.getCharacteristic(this.platform.Characteristic.StatusLowBattery)
+    battery.getCharacteristic(this.platform.Characteristic.StatusLowBattery)
       .onGet(this.getStatusBatteryLow.bind(this));
-    this.battery.getCharacteristic(this.platform.Characteristic.ChargingState)
+    battery.getCharacteristic(this.platform.Characteristic.ChargingState)
       .onGet(this.getChargingState.bind(this));
 
     // Setup external temperature sensor
@@ -101,6 +101,13 @@ export class Car {
     externalTemperature.setCharacteristic(this.platform.Characteristic.Name, 'External Temperature');
     externalTemperature.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
       .onGet(this.getCurrentTemperature.bind(this));
+
+    // Setup occupancy sensor
+    const occupancy = this.accessory.getService('occupancy') ||
+      this.accessory.addService(this.platform.Service.OccupancySensor, 'occupancy', this.vin);
+    occupancy.setCharacteristic(this.platform.Characteristic.Name, 'Engine On');
+    occupancy.getCharacteristic(this.platform.Characteristic.OccupancyDetected)
+      .onGet(this.getOccupancyDetected.bind(this));
 
     this.startControlLoop();
   }
@@ -123,6 +130,30 @@ export class Car {
     return this.current.isEngineOn ? 1 : 0; // CHARGING : NOT_CHARGING
   }
 
+  private getBackLeftContactSensorState(): CharacteristicValue {
+    let state: number;
+    if (!this.current) {
+      state = 0; // CONTACT_DETECTED
+    } else {
+      state = this.current.areDoorsClosed.backLeft ? 0 : 1; // CONTACT_DETECTED : CONTACT_NOT_DETECTED
+    }
+
+    this.platform.log.info('getBackLeftContactSensorState:', state);
+    return state;
+  }
+
+  private getBackRightContactSensorState(): CharacteristicValue {
+    let state: number;
+    if (!this.current) {
+      state = 0; // CONTACT_DETECTED
+    } else {
+      state = this.current.areDoorsClosed.backRight ? 0 : 1; // CONTACT_DETECTED : CONTACT_NOT_DETECTED
+    }
+
+    this.platform.log.info('getBackRightContactSensorState:', state);
+    return state;
+  }
+
   private getCurrentLockState(): CharacteristicValue {
     let currentLockState: number;
     if (!this.current) {
@@ -142,31 +173,6 @@ export class Car {
 
     this.platform.log.info('getCurrentTemperature:', this.current.exteriorTemperature);
     return this.current.exteriorTemperature;
-  }
-
-  private getBackLeftContactSensorState(): CharacteristicValue {
-    let state: number;
-    if (!this.current) {
-      state = 0; // CONTACT_DETECTED
-    } else {
-      state = this.current.areDoorsClosed.backLeft ? 0 : 1; // CONTACT_DETECTED : CONTACT_NOT_DETECTED
-    }
-
-    this.platform.log.info('getBackLeftContactSensorState:', state);
-    return state;
-  }
-
-
-  private getBackRightContactSensorState(): CharacteristicValue {
-    let state: number;
-    if (!this.current) {
-      state = 0; // CONTACT_DETECTED
-    } else {
-      state = this.current.areDoorsClosed.backRight ? 0 : 1; // CONTACT_DETECTED : CONTACT_NOT_DETECTED
-    }
-
-    this.platform.log.info('getBackRightContactSensorState:', state);
-    return state;
   }
 
   private getHoodContactSensorState(): CharacteristicValue {
@@ -203,6 +209,15 @@ export class Car {
 
     this.platform.log.info('getFrontRightContactSensorState:', state);
     return state;
+  }
+
+  private getOccupancyDetected(): CharacteristicValue {
+    if (!this.current) {
+      return 0;
+    }
+
+    this.platform.log.info('getOccupancyDetected:', this.current.isEngineOn);
+    return this.current.isEngineOn ? 1 : 0; // OCCUPANCY_DETECTED : OCCUPANCY_NOT_DETECTED
   }
 
   private getStatusBatteryLow(): CharacteristicValue {
@@ -310,10 +325,6 @@ export class Car {
 }
 
 type VehicleInfo = {
-  batteryPercent: number;
-  exteriorTemperature: number;
-  isBatteryLow: boolean;
-  isEngineOn: boolean;
   areDoorsLocked: boolean;
   areDoorsClosed: {
     frontLeft: boolean;
@@ -323,7 +334,11 @@ type VehicleInfo = {
     backRight: boolean;
     trunk: boolean;
   };
+  batteryPercent: number;
+  exteriorTemperature: number;
   isAirOn: boolean;
+  isBatteryLow: boolean;
+  isEngineOn: boolean;
 };
 
 const parseVehicleInfo = (res: VehicleInfoList): VehicleInfo => {
@@ -336,9 +351,6 @@ const parseVehicleInfo = (res: VehicleInfoList): VehicleInfo => {
   }
 
   return {
-    exteriorTemperature,
-    isEngineOn: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.engine,
-    areDoorsLocked: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorLock,
     areDoorsClosed: {
       backLeft: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorStatus.backLeft === 0,
       backRight: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorStatus.backRight === 0,
@@ -347,9 +359,12 @@ const parseVehicleInfo = (res: VehicleInfoList): VehicleInfo => {
       frontRight: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorStatus.frontRight === 0,
       trunk: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorStatus.trunk === 0,
     },
-    isAirOn: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.airCtrl,
+    areDoorsLocked: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorLock,
     batteryPercent: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.batteryStatus.stateOfCharge,
+    exteriorTemperature,
+    isAirOn: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.airCtrl,
     isBatteryLow: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.batteryStatus.stateOfCharge
       < res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.batteryStatus.warning,
+    isEngineOn: res.lastVehicleInfo.vehicleStatusRpt.vehicleStatus.engine,
   };
 };

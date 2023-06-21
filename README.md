@@ -23,6 +23,7 @@ This plug-in will create a **switch** to turn the engine / climate control on an
 - [ ] Heated / air conditioned seats
 - [ ] Defrost
 - [ ] Heated steering wheel
+- [x] Occupancy sensor when engine is on
 
 ### Known Issues
 When flipping a switch in HomeKit, it could be several seconds before the desired state is achieved. This is due to the aysnc nature and overall speed of KIA's APIs. Typically, a remote command takes around 6 seconds to send, then around 10-15 seconds to be applied to the car.
