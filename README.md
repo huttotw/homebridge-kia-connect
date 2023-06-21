@@ -12,7 +12,11 @@
 
 This plug-in uses an undocumented KIA API to start, stop and lock your KIA. This API was discovered by insepecting the network traffic in the KIA Connect web app.
 
-This plug-in will create a **switch** to turn the engine / climate control on and off as well as a **lock mechanism** to lock / unlock the doors.
+This plug-in will create a **switch** to turn the engine / climate control on and off as well as a **lock mechanism** to lock / unlock the doors. Several sensors will also be created so that you can build automations:
+1. Contact sensors for front left, front right, back left, back right doors as well as the hood and trunk.
+2. Exterior temperature sensor
+3. Battery level with low battery status
+4. Occupancy sensor that is "occupied" while the engine is running
 
 > Frequently calling this API could result in the consumption of your car's battery power. By default, we make one request per hour and make up to 5 requests after requesting a change of state. This is similar to how the KIA web app works.
 
@@ -27,6 +31,8 @@ This plug-in will create a **switch** to turn the engine / climate control on an
 
 ### Known Issues
 When flipping a switch in HomeKit, it could be several seconds before the desired state is achieved. This is due to the aysnc nature and overall speed of KIA's APIs. Typically, a remote command takes around 6 seconds to send, then around 10-15 seconds to be applied to the car.
+
+The door contact sensors all have the same name. Unfortunately this is a limitation of a HomeKit. To overcome this, I would need to refactor the code to create a new Accessory per sensor.
 
 ## Installation instructions
 You will need the following items:
