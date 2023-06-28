@@ -5,6 +5,7 @@ import {
   HeatVentType,
   LogInRequest,
   LogInResponse,
+  OneToTen,
   RemoteClimateRequest,
   VehicleInfoList,
   VehicleInfoResponse,
@@ -103,7 +104,7 @@ export class KiaConnect {
     return res.data.header.xid;
   }
 
-  async startClimate(vin: string, targetTempF: string): Promise<string> {
+  async startClimate(vin: string, targetTempF: string, ignitionOnDuration: OneToTen): Promise<string> {
     await this.logIn({userId: this.userId, password: this.password});
     const req: RemoteClimateRequest = {
       action: 'ACTION_EXEC_REMOTE_CLIMATE_ON',
@@ -116,7 +117,7 @@ export class KiaConnect {
         defrost: false,
         ventilationWarning: false,
         ignitionOnDuration: {
-          value: 5,
+          value: ignitionOnDuration,
           unit: 4,
         },
         heatingAccessory: {

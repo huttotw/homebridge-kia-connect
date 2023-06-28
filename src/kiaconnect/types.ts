@@ -166,6 +166,8 @@ export enum HeatVentLevel {
     Off = 1,
 }
 
+export type OneToTen = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+
 export interface RemoteClimateRequest {
     action: 'ACTION_EXEC_REMOTE_CLIMATE_ON';
     remoteClimate: {
@@ -177,7 +179,7 @@ export interface RemoteClimateRequest {
       defrost: boolean;
       ventilationWarning: boolean;
       ignitionOnDuration: {
-        value: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+        value: OneToTen;
         unit: 4;
       };
       heatingAccessory: {

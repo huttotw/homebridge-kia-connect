@@ -69,6 +69,13 @@
               "type": "number",
               "required": true,
               "default": 3600000
+            },
+            "engineOnDuration": {
+              "title": "Engine On Duration",
+              "description": "The number of minutes that the car will be turned on once started. This value must be between 1 and 10.",
+              "type": "number",
+              "required": true,
+              "default": 5
             }
           }
         }

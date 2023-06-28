@@ -1,7 +1,7 @@
 import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 
 import { Platform } from './platform';
-import { VehicleInfoList } from './kiaconnect/types';
+import { OneToTen, VehicleInfoList } from './kiaconnect/types';
 import { KiaConnect } from './kiaconnect/client';
 
 type Door = {
@@ -14,6 +14,19 @@ type Door = {
 type Target = {
   lockState: CharacteristicValue;
 };
+
+interface Options {
+  engineOnDuration: OneToTen;
+  refreshInterval: number;
+  targetTemperature: string;
+}
+
+const defaultOptions: Options = {
+  engineOnDuration: 10,
+  refreshInterval: 1000 * 60 * 60, // Every 1 hour
+  targetTemperature: '68',
+};
+
 /**
  * Car
  * An instance of this class is created for each accessory your platform registers
@@ -32,9 +45,14 @@ export class Car {
     private readonly kiaConnect: KiaConnect,
     private readonly name: string,
     private readonly vin: string,
-    private readonly targetTemperature: string,
-    private readonly refreshInterval: number,
+    private readonly options: Options = {
+      engineOnDuration: 10,
+      refreshInterval: 1000 * 60 * 60, // Every 1 hour
+      targetTemperature: '68',
+    },
   ) {
+    options = Object.assign(defaultOptions, options);
+
     // target indicate where we want each value to be. These are sane defaults.
     this.target = {
       lockState: 0,
@@ -287,7 +305,7 @@ export class Car {
     if (value) {
       // Turn on the engine
       this.platform.log.info('Turning on the engine');
-      xid = await this.kiaConnect.startClimate(this.vin, this.targetTemperature);
+      xid = await this.kiaConnect.startClimate(this.vin, this.options.targetTemperature, this.options.engineOnDuration);
     } else {
       // Turn off the engine
       this.platform.log.info('Turning off the engine');
@@ -316,11 +334,11 @@ export class Car {
 
   private async startControlLoop() {
     this.platform.log.info('Starting control loop', {
-      refreshInterval: this.refreshInterval,
+      refreshInterval: this.options.refreshInterval,
       vin: this.vin,
     });
     this.refresh();
-    setInterval(this.refresh.bind(this), this.refreshInterval || 1000 * 60 * 60); // Every 1 hour
+    setInterval(this.refresh.bind(this), this.options.refreshInterval);
   }
 }
 
